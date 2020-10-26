@@ -57,8 +57,6 @@ int main(int argc, char *argv[]) {
     /* create cartesian topology for processes */
     /*************************************************************/
     MPI_Dims_create(size-1, ndims, dims);
-    //if(my_rank==0)
-        //printf("Root Rank: %d. Comm Size: %d: Grid Dimension = [%d x %d] \n",my_rank,size,dims[0],dims[1]);
     
     /* create cartesian mapping */
     wrap_around[0] = 0;
@@ -118,9 +116,12 @@ int main(int argc, char *argv[]) {
 		    MPI_Status send_status[4];
 		    MPI_Status receive_status[4];
 		    MPI_Status status;
+
+            // generate random temperature in range of [70, 90]
 	        unsigned int seed = time(NULL)*my_rank;
-            randomVal = rand_r(&seed) % 150 + 1;
-	
+            randomVal = (rand_r(&seed) % (90 - 70 + 1)) + 70;
+            
+            // sends randomVal to it's immediate neighbour nodes
             for(int i=0; i<4; i++)
             {
                 if (neighbours[i] != -2) {
@@ -129,9 +130,10 @@ int main(int argc, char *argv[]) {
             }
 	    //printf("Rank: %d. Value: %d. Timestmp: %d.\n", my_rank, randomVal, timestamp);
             if (randomVal > THRESHOLD) {
-                int recVals[4] = {0};
-                // send request msg to neighbour nodes and waits for a reply of requested msg
+
+                int recVals[4] = {0};   // array that stores received values from immediate nodes
                 
+                // MPI_Irecv to get values from immediate nodes
                 for(int i=0; i<4; i++)
                 {
                     if (neighbours[i] != -2) {
@@ -143,59 +145,33 @@ int main(int argc, char *argv[]) {
                 
                 printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d. Timestmp: %d\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, recVals[0], recVals[1], recVals[2], recVals[3], timestamp);
 
+                // Compare received values from immediate nodes to see if there's more than 2 readings that are within the range of 5
                 int matchCnt = 0;
                 int matchCntArr[4] = {0};
                 for(int i=0; i<4; i++)
                 {
                     int range = recVals[i] - randomVal;
-                    if (recVals[i] > THRESHOLD && abs(range) <= 20) {
+                    if (recVals[i] > THRESHOLD && abs(range) <= 5) {
                         // Stores matched data rank
                         matchCntArr[matchCnt] = i;
                         matchCnt += 1;
                     }
                 }
 
-                bool toBaseFlag = false;
+                // TODO!!!
                 // If more than 2 neighbours match, sends report to base station
-                // Informs affected neighbour this node will sends report to base
                 if (matchCnt >= 2) {
-                    int maxReading = 0;
-                    for (int i = 0; i < matchCnt; i++) {
-                        if (randomVal > recVals[matchCntArr[i]]) {
-                            toBaseFlag = true;
-                        } else if (recVals[matchCntArr[i]] == randomVal)
-                        {
-                            if (my_rank > matchCntArr[i])
-                                toBaseFlag = true;
-                            else
-                                toBaseFlag = false;
-                        } else
-                        {
-                            toBaseFlag = false;
-                        }                       
-                    }
+                    printf("TO BASE. Rank: %d", my_rank);
+                    // Sends report to BASE station
+                    // 1. temp. reading
+                    // 2. timestamp
+                    // 3. nodes rank
 
-                    if (toBaseFlag) {
-                        printf("TO BASE. Rank: %d", my_rank);
-                        // Sends report to BASE station
-                        // 1. temp. reading
-                        // 2. timestamp
-                        // 3. nodes rank
-                    } 
                 }
-                
-                // MPI_Waitall(4, send_request, send_status);
-                // MPI_Waitall(4, receive_request, receive_status);
-
-
             } else {
-
-
-            printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Timestmp: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, timestamp);
+                printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Timestmp: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, timestamp);
             }
-            //printf("MID. Rank: %d. Timestmp: %d.\n", my_rank, timestamp);
 		
-	    //printf("END. Rank: %d. Timestmp: %d.\n", my_rank, timestamp);
             timestamp += 1;
             sleep(2);
         }
