@@ -20,8 +20,6 @@
 #define DISP 1
 #define THRESHOLD 80
 #define TOL_RANGE 5
-#define REQUEST_DATA_TAG 0
-#define NO_REQUEST_DATA_TAG 1
 #define ITERATION 100
 
 int main(int argc, char *argv[]) {
@@ -66,8 +64,7 @@ int main(int argc, char *argv[]) {
     MPI_Dims_create(size-1, ndims, dims);
 
     if (my_rank == size-1) {
-        // BASE STATION CODE
-        //printf("Base Station Rank: %d. Comm Size: %d: Grid Dimension = [%d x %d] \n",my_rank,size,dims[0],dims[1]);
+        // base station process
 	    base_station(MPI_COMM_WORLD, new_comm, dims[0], dims[1], my_rank);
         
     } else {
@@ -119,7 +116,8 @@ int main(int argc, char *argv[]) {
                     MPI_Isend(&randomVal, 1, MPI_INT, neighbours[i], timestamp, comm2D, &send_request[i]);
                 }
             }
-	    //printf("Rank: %d. Value: %d. Timestmp: %d.\n", my_rank, randomVal, timestamp);
+
+            // if randomval exceeds thershold
             if (randomVal > THRESHOLD) {
 
                 int recVals[4] = {0};   // array that stores received values from immediate nodes
@@ -130,12 +128,9 @@ int main(int argc, char *argv[]) {
                     if (neighbours[i] != -2) {
                         MPI_Irecv(&recVals[i], 1, MPI_INT, neighbours[i], timestamp, comm2D, &receive_request[i]);	
                         MPI_Wait(&receive_request[i], &status);
-                        //printf("RECEIVE. Rank: %d, timestmp: %d, neighbour: %d.\n", my_rank, timestamp, neighbours[i]);
                     }
                 }
                 
-                //printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d. Timestmp: %d\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, recVals[0], recVals[1], recVals[2], recVals[3], timestamp);
-
                 // Compare received values from immediate nodes to see if there's more than 2 readings that are within the range of 5
                 int matchCnt = 0;
                 for(int i=0; i<4; i++)
@@ -146,10 +141,8 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                // TODO!!!
                 // If more than 2 neighbours match, sends report to base station
                 if (matchCnt >= 2) {
-                    //printf("TO BASE. Rank: %d", my_rank);
                     time_t now;
                     struct tm ts;
                     char timestmpBuf[50];
@@ -159,9 +152,9 @@ int main(int argc, char *argv[]) {
                     
                     ts = *localtime(&now);
                     strftime(timestmpBuf, sizeof(timestmpBuf), "%a %Y-%m-%d %H:%M:%S", &ts);
-                    //printf("%s\n", timestmpBuf);
                     double ts2 = MPI_Wtime();
                     
+                    // pack information in one message and sends to base station
                     int position = 0;
                     MPI_Pack(&randomVal, 1, MPI_INT, buffer, 150, &position, MPI_COMM_WORLD);
                     MPI_Pack(&ts2, 1, MPI_DOUBLE, buffer, 150, &position, MPI_COMM_WORLD);
@@ -171,40 +164,10 @@ int main(int argc, char *argv[]) {
 
                 }
             } 
-            //else {
-            //    printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Timestmp: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, timestamp);
-            //}
 		
             timestamp += 1;
             sleep(2);
         }
-        
-        
-        
-        
-        // printf("Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, recVals[0], recVals[1], recVals[2], recVals[3]);
-        
-        // // each process writes to it's own text file according to their rank
-        // char filename[30];
-        // sprintf(filename, "process_%d_task2b.txt", my_rank);
-        // FILE *pFile = fopen(filename, "w");
-        
-        // // compare receive values who its randomVal
-        // flag = true;
-        // for (int i=0; i<4; i++) {
-        //     if (randomVal != recVals[i] && recVals[i] != 0) {
-        //         flag = false;
-        //         break;
-        //     }
-        // }
-        
-        // // if compare flag is true, log to process_i.txt file
-        // if (flag) {
-        //     fprintf(pFile, "Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, recVals[0], recVals[1], recVals[2], recVals[3]);
-        //     printf("[MATCHED] Global rank: %d. Cart rank: %d. Coord: (%d, %d). Random Val: %d. Recv Top: %d. Recv Bottom: %d. Recv Left: %d. Recv Right: %d.\n", my_rank, my_cart_rank, coord[0], coord[1], randomVal, recVals[0], recVals[1], recVals[2], recVals[3]);
-        // }
-        
-        // fclose(pFile);
         MPI_Comm_free( &comm2D );
     }
     
