@@ -6,10 +6,10 @@
 #define NUM_THREADS 2
 
 int infraredReadings[100];	// shared array for infrared readings
-int node_size;			// shared sensor nodes size
+int node_size;			    // shared sensor nodes size
 
 void *InfraredSim(); // infrared simulation function format
-bool Comparison(int row, int col, int recv_rank, int recv_iteration);
+bool Comparison(int row, int col, int recv_rank, int recv_iteration); // Comparison algorithm function format
 
 int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node_size) {
 	
@@ -17,14 +17,13 @@ int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node
 	int threadNum[NUM_THREADS];
 	node_size = _node_size;
 	
-	//int count, size;
 	int flag = 0;
 	int iteration = 0;
-	//MPI_Comm_size(comm_world, &size);
 	
 	int true_alerts = 0;
 	int false_alerts = 0;
 	
+    // opens log file for base station
 	FILE *pFile = fopen("base_station_log.txt", "a");
 	
 	double main_timetaken, starttime, endtime;
@@ -35,6 +34,7 @@ int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node
 	threadNum[0] = 0;
 	pthread_create(&tid[0], 0, InfraredSim, &threadNum[0]);
 	
+    // gets the program start time
 	starttime = MPI_Wtime();
 	
 	// code for base station computation
@@ -65,6 +65,7 @@ int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node
 					MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm_world, &flag,&status);
 		    	}
 		    	
+                // if a messaged is waiting to be received
 		    	if(flag)
 		    	{
 					MPI_Get_count(&status, MPI_INT, &count);
@@ -100,12 +101,13 @@ int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node
 	                
 	                	ts = *localtime(&now);
 	                	strftime(loggedTime, sizeof(loggedTime), "%a %Y-%m-%d %H:%M:%S", &ts);
-	    				// TODO: Log to file
 
+                        // Get information from infrared satellite
 						int infraredReadingPointer = (recv_iteration%50)*2; 
 						int infraVal = infraredReadings[infraredReadingPointer];
 						int infraRank = infraredReadings[infraredReadingPointer+1];
 						
+                        // Log alert information to file
 	    				fprintf(pFile, "------------------------------------------------------------------\n");
 	    				fprintf(pFile, "Iteration: %d\n", recv_iteration);
 	    				fprintf(pFile, "Alert reported time: \t%s\n", recv_timestmp);
@@ -139,6 +141,7 @@ int base_station(MPI_Comm comm_world, MPI_Comm comm, int row, int col, int _node
 	endtime = MPI_Wtime();
 	main_timetaken = endtime - starttime;
 	
+    // Log total true and false alerts and total time taken for the program to terminate itself
 	printf("Total true alerts: %d, false alerts: %d.\n", true_alerts, false_alerts);
 	printf("Total time taken: %f.\n", main_timetaken);
 	return 0;
@@ -150,10 +153,11 @@ void *InfraredSim()
 	{
 		int cyclicPointer = i%50;
 		unsigned int seed = time(NULL)*i;
+
+        // store temperature reading
     	infraredReadings[cyclicPointer] = (rand_r(&seed) % (90 - 70 + 1)) + 70;
-    	//infraredReadings[i] = 85;
+        // store rank
     	infraredReadings[cyclicPointer+1] = rand_r(&seed) % (node_size);
-    	//printf("INFRARED. Iteration: %d, value: %d, rank: %d.\n", i, infraredReadings[i], infraredReadings[i+1]);  
     	sleep(2);
 	}
 }
